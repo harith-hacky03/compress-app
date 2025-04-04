@@ -112,8 +112,6 @@ export default function FileCompressor({ token }) {
         throw new Error(errorData.message || 'Failed to upload zip file');
       }
 
-      // Download the zip file
-      saveAs(content, 'compressed_files.zip');
       
       // Then, upload individual files to MongoDB
       for (const file of filesToCompress) {
