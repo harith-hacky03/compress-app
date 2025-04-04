@@ -1,40 +1,33 @@
 import { NextResponse } from 'next/server';
-import { GridFSBucket } from 'mongodb';
-import jwt from 'jsonwebtoken';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import mongoose from 'mongoose';
-import { verifyToken } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
-import { getDb } from '@/lib/mongodb';
+import { verifyToken } from '@/lib/auth';
+import User from '@/models/User';
+import { GridFSBucket } from 'mongodb';
+import { Readable } from 'stream';
 
-export async function OPTIONS() {
+const corsHeaders = (origin) => ({
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Origin': origin || 'https://compress-app.vercel.app',
+  'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+  'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
+});
+
+export async function OPTIONS(request) {
+  const origin = request.headers.get('origin') || 'https://compress-app.vercel.app';
   return new NextResponse(null, {
     status: 200,
-    headers: {
-      'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-      'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-    },
+    headers: corsHeaders(origin),
   });
 }
 
 export async function POST(request) {
+  const origin = request.headers.get('origin') || 'https://compress-app.vercel.app';
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json(
         { error: 'No token provided' },
-        { 
-          status: 401,
-          headers: {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-          }
-        }
+        { status: 401, headers: corsHeaders(origin) }
       );
     }
 
@@ -42,15 +35,7 @@ export async function POST(request) {
     if (!token) {
       return NextResponse.json(
         { error: 'No token provided' },
-        { 
-          status: 401,
-          headers: {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-          }
-        }
+        { status: 401, headers: corsHeaders(origin) }
       );
     }
 
@@ -58,20 +43,13 @@ export async function POST(request) {
     if (!decoded || !decoded.userId) {
       return NextResponse.json(
         { error: 'Invalid token' },
-        { 
-          status: 401,
-          headers: {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-          }
-        }
+        { status: 401, headers: corsHeaders(origin) }
       );
     }
 
-    await connectToDatabase();
-    const db = await getDb();
+    // Connect to MongoDB and get the database instance
+    const conn = await connectToDatabase();
+    const db = conn.connection.db;
     const bucket = new GridFSBucket(db, { bucketName: 'files' });
 
     const formData = await request.formData();
@@ -82,31 +60,53 @@ export async function POST(request) {
     if (!file) {
       return NextResponse.json(
         { error: 'No file provided' },
-        { 
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-          }
-        }
+        { status: 400, headers: corsHeaders(origin) }
       );
     }
 
+    // Validate file size (optional: add a size limit)
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit
+      return NextResponse.json(
+        { error: 'File size exceeds 50MB limit' },
+        { status: 400, headers: corsHeaders(origin) }
+      );
+    }
+
+    // Open an upload stream to GridFS with metadata
     const uploadStream = bucket.openUploadStream(file.name, {
       metadata: {
         userId: decoded.userId,
         isZipped,
-        originalFiles: originalFiles ? JSON.parse(originalFiles) : null
+        originalFiles: originalFiles ? JSON.parse(originalFiles) : null,
+        contentType: file.type,
+        size: file.size
       }
     });
 
+    // Convert file's ArrayBuffer to a Node Buffer
     const buffer = await file.arrayBuffer();
-    await uploadStream.write(buffer);
-    await uploadStream.end();
+    const nodeBuffer = Buffer.from(buffer);
 
+    // Create a readable stream from the nodeBuffer
+    const readableStream = Readable.from(nodeBuffer);
+
+    // Pipe the readable stream into the GridFS upload stream and await finish
+    await new Promise((resolve, reject) => {
+      readableStream
+        .pipe(uploadStream)
+        .on('error', reject)
+        .on('finish', resolve);
+    });
+
+    // Update the user document with the file ID
     const user = await User.findById(decoded.userId);
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404, headers: corsHeaders(origin) }
+      );
+    }
+
     if (isZipped) {
       user.zippedFiles.push(uploadStream.id);
     } else {
@@ -115,34 +115,20 @@ export async function POST(request) {
     await user.save();
 
     return NextResponse.json(
-      { 
+      {
         message: 'File uploaded successfully',
         fileId: uploadStream.id,
-        fileName: file.name
+        fileName: file.name,
+        size: file.size,
+        isZipped
       },
-      { 
-        status: 200,
-        headers: {
-          'Access-Control-Allow-Credentials': 'true',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-          'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-        }
-      }
+      { status: 200, headers: corsHeaders(origin) }
     );
   } catch (error) {
     console.error('Upload error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { 
-        status: 500,
-        headers: {
-          'Access-Control-Allow-Credentials': 'true',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-          'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-        }
-      }
+      { error: error.message || 'Internal server error' },
+      { status: 500, headers: corsHeaders(origin) }
     );
   }
-} 
+}

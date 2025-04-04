@@ -4,19 +4,23 @@ import jwt from 'jsonwebtoken';
 import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/models/User';
 
-export async function OPTIONS() {
+const corsHeaders = (origin) => ({
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Origin': origin || 'https://compress-app.vercel.app',
+  'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+  'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
+});
+
+export async function OPTIONS(request) {
+  const origin = request.headers.get('origin') || 'https://compress-app.vercel.app';
   return new NextResponse(null, {
     status: 200,
-    headers: {
-      'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-      'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-    },
+    headers: corsHeaders(origin),
   });
 }
 
 export async function POST(request) {
+  const origin = request.headers.get('origin') || 'https://compress-app.vercel.app';
   try {
     const { email, password } = await request.json();
 
@@ -25,12 +29,7 @@ export async function POST(request) {
         { error: 'Email and password are required' },
         { 
           status: 400,
-          headers: {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-          }
+          headers: corsHeaders(origin)
         }
       );
     }
@@ -43,12 +42,7 @@ export async function POST(request) {
         { error: 'Invalid email or password' },
         { 
           status: 401,
-          headers: {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-          }
+          headers: corsHeaders(origin)
         }
       );
     }
@@ -59,12 +53,7 @@ export async function POST(request) {
         { error: 'Invalid email or password' },
         { 
           status: 401,
-          headers: {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-          }
+          headers: corsHeaders(origin)
         }
       );
     }
@@ -82,12 +71,7 @@ export async function POST(request) {
       },
       { 
         status: 200,
-        headers: {
-          'Access-Control-Allow-Credentials': 'true',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-          'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-        }
+        headers: corsHeaders(origin)
       }
     );
   } catch (error) {
@@ -96,12 +80,7 @@ export async function POST(request) {
       { error: 'Internal server error' },
       { 
         status: 500,
-        headers: {
-          'Access-Control-Allow-Credentials': 'true',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-          'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
-        }
+        headers: corsHeaders(origin)
       }
     );
   }
