@@ -1,61 +1,99 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import connectDB from '@/lib/mongodb';
+import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/models/User';
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+      'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
+    },
+  });
+}
 
 export async function POST(request) {
   try {
-    const { email, password } = await request.json();
+    const { name, email, password } = await request.json();
 
-    if (!email || !password) {
+    if (!name || !email || !password) {
       return NextResponse.json(
-        { message: 'Email and password are required' },
-        { status: 400 }
+        { error: 'Name, email, and password are required' },
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
+          }
+        }
       );
     }
 
-    try {
-      await connectDB();
-    } catch (error) {
-      console.error('Database connection error:', error);
-      return NextResponse.json(
-        { message: 'Database connection error' },
-        { status: 500 }
-      );
-    }
+    await connectToDatabase();
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return NextResponse.json(
-        { message: 'User already exists' },
-        { status: 400 }
+        { error: 'User already exists' },
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+            'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
+          }
+        }
       );
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create new user
-    const user = await User.create({
+    const user = new User({
+      name,
       email,
       password: hashedPassword,
     });
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET || '89489',
-      { expiresIn: '7d' }
-    );
+    await user.save();
 
-    return NextResponse.json({ token });
+    return NextResponse.json(
+      { 
+        message: 'User registered successfully',
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email
+        }
+      },
+      { 
+        status: 201,
+        headers: {
+          'Access-Control-Allow-Credentials': 'true',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+          'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
+        }
+      }
+    );
   } catch (error) {
     console.error('Registration error:', error);
     return NextResponse.json(
-      { message: 'Error creating user' },
-      { status: 500 }
+      { error: 'Internal server error' },
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Credentials': 'true',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+          'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
+        }
+      }
     );
   }
 } 

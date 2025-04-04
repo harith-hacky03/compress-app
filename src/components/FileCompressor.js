@@ -28,57 +28,34 @@ export default function FileCompressor({ token }) {
   }, [token, apiUrl]);
 
   const fetchUserFiles = async () => {
-    if (!token || !apiUrl) {
-      console.log('Missing token or API URL');
-      return;
-    }
-
     try {
-      setIsLoading(true);
-      setError('');
-      console.log('Fetching files from:', `${apiUrl}/api/files`);
-      
-      const response = await fetch(`${apiUrl}/api/files`, {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log('No token found');
+        return;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/files`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'Accept': 'application/json',
         },
         credentials: 'include',
+        mode: 'cors'
       });
-      
-      console.log('Files response status:', response.status);
-      
+
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Files response error:', errorData);
-        throw new Error(errorData.message || 'Failed to fetch files');
+        throw new Error(errorData.error || 'Failed to fetch files');
       }
-      
+
       const data = await response.json();
-      console.log('Files data:', data);
-      
-      if (!data || typeof data !== 'object') {
-        throw new Error('Invalid response format from server');
-      }
-      
-      // Ensure we have arrays for both files and zippedFiles
-      const files = Array.isArray(data.files) ? data.files : [];
-      const zippedFiles = Array.isArray(data.zippedFiles) ? data.zippedFiles : [];
-      
-      console.log('Setting files:', files.length);
-      console.log('Setting zipped files:', zippedFiles.length);
-      
-      setUserFiles(files);
-      setZippedFiles(zippedFiles);
+      setFiles(data.files || []);
+      setZippedFiles(data.zippedFiles || []);
     } catch (error) {
       console.error('Error fetching files:', error);
-      setError(error.message || 'Failed to load your files. Please try again later.');
-      // Clear the files lists on error
-      setUserFiles([]);
-      setZippedFiles([]);
+      setError(error.message);
     } finally {
       setIsLoading(false);
     }
