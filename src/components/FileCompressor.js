@@ -34,7 +34,6 @@ export default function FileCompressor({ token }) {
         console.log('No token found');
         return;
       }
-
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/files`, {
         method: 'GET',
         headers: {
@@ -44,14 +43,14 @@ export default function FileCompressor({ token }) {
         credentials: 'include',
         mode: 'cors'
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch files');
       }
-
       const data = await response.json();
       setFiles(data.files || []);
+      // Fix: update userFiles so the download button gets the correct fileId.
+      setUserFiles(data.files || []);
       setZippedFiles(data.zippedFiles || []);
     } catch (error) {
       console.error('Error fetching files:', error);
@@ -60,6 +59,7 @@ export default function FileCompressor({ token }) {
       setIsLoading(false);
     }
   };
+  
 
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
